@@ -1,10 +1,11 @@
 " Vim filetype plugin file for adding getter/setter methods
 " Language:	PHP
 " Maintainer: Antoni Jakubiak (antek AT clubbing czest pl)
-" Last Change: 2006 Nov
+" Last Change: 2010 Dec
 " Revision: $Id$
 " Credit: 
 "    - It's modification java_getset.vim by Pete Kazmier
+"    - Changed by Mathias Lieber (big_chief AT gmx dot de) to add support for type prefixes (hungarian notation)
 "
 " =======================================================================
 "
@@ -254,15 +255,15 @@ if exists("b:phpgetset_getterTemplate")
 else  
   let s:phpgetset_getterTemplate = 
     \ "\n" .
-    \ "/**\n" .
-    \ " * Get %varname%.\n" .
-    \ " *\n" .
-    \ " * @return %varname%.\n" .
-    \ " */\n" .
-    \ "function %funcname%()\n" .
-    \ "{\n" .
-    \ "    return $this->%varname%;\n" .
-    \ "}"
+    \ "\t/**\n" .
+    \ "\t* Get %varname%.\n" .
+    \ "\t*\n" .
+    \ "\t* @return %vartype% %varname%.\n" .
+    \ "\t*/\n" .
+    \ "\tfunction %funcname%()\n" .
+    \ "\t{\n" .
+    \ "\t\treturn $this->%varname%;\n" .
+    \ "\t}\n\n"
 endif
 
 
@@ -272,15 +273,17 @@ if exists("b:phpgetset_setterTemplate")
 else  
   let s:phpgetset_setterTemplate = 
   \ "\n" .
-  \ "/**\n" .
-  \ " * Set %varname%.\n" .
-  \ " *\n" .
-  \ " * @param %varname% the value to set.\n" . 
-  \ " */\n" .
-  \ "function %funcname%($%varname%)\n" .
-  \ "{\n" .
-  \ "    $this->%varname% = $%varname%;\n" .
-  \ "}"
+  \ "\t/**\n" .
+  \ "\t* Set %varname%.\n" .
+  \ "\t*\n" .
+  \ "\t* @param %vartype% %varname% the value to set.\n" .
+  \ "\t* @return bool\n" .
+  \ "\t*/\n" .
+  \ "\tfunction %funcname%($%varname%)\n" .
+  \ "\t{\n" .
+  \ "\t\t$this->%varname% = $%varname%;\n" .
+  \ "\t\treturn TRUE;\n" .
+  \ "\t}\n\n\n\n\n"
 endif
 
 
@@ -307,6 +310,9 @@ let s:indent    = ''
 
 " The name of the property
 let s:varname   = ''
+
+" The type of the property
+let s:vartype	= ''
 
 " The function name of the property (capitalized varname)
 let s:funcname  = ''
@@ -500,7 +506,33 @@ if !exists("*s:ProcessVariable")
   function s:ProcessVariable(variable)
     let s:indent    = substitute(a:variable, s:variable, '\1', '') 
     let s:varname   = substitute(a:variable, s:variable, '\4', '') 
-    let s:funcname  = toupper(s:varname[0]) . strpart(s:varname, 1)
+
+
+
+    " try to find a type prefix on the camelCased property name
+    let s:vartype 	= substitute(s:varname, '^\(a\|b\|dt\|f\|i\|n\|o\|r\|s\)\([A-Z].*\)$', '\1', '')
+
+    " did we find a camelCase property name with a type prefix?
+    if (s:vartype != s:varname)
+    	let s:funcname  = substitute(s:varname, '^\(a\|b\|dt\|f\|i\|n\|o\|r\|s\)', '', '')
+
+	" Translate type prefix to human-readable type names
+        let s:vartype 	= substitute(s:vartype, '^a$', 'array', '')
+        let s:vartype 	= substitute(s:vartype, '^b$', 'bool', '')
+        let s:vartype 	= substitute(s:vartype, '^dt$', 'datetime', '')
+        let s:vartype 	= substitute(s:vartype, '^f$', 'float', '')
+        let s:vartype 	= substitute(s:vartype, '^i$', 'int', '')
+        let s:vartype 	= substitute(s:vartype, '^n$', 'int', '')
+        let s:vartype 	= substitute(s:vartype, '^o$', 'object', '')
+        let s:vartype 	= substitute(s:vartype, '^r$', 'ressource', '')
+        let s:vartype 	= substitute(s:vartype, '^s$', 'string', '')
+    else
+	" No, we didnt find a type prefix. Use default function name
+    	let s:funcname  = toupper(s:varname[0]) . strpart(s:varname, 1)
+	let s:vartype = '<type>'
+    endif
+
+
 
     " If any getter or setter already exists, then just return as there
     " is nothing to be done.  The assumption is that the user already
@@ -536,7 +568,9 @@ if !exists("*s:InsertGetter")
 
 
     let method = substitute(method, '%varname%', s:varname, 'g')
+    let method = substitute(method, '%vartype%', s:vartype, 'g')
     let method = substitute(method, '%funcname%', 'get' . s:funcname, 'g')
+    let method = substitute(method, '%property%', s:funcname, 'g')
 
     call s:InsertMethodBody(method)
 
@@ -551,7 +585,9 @@ if !exists("*s:InsertSetter")
     let method = s:phpgetset_setterTemplate
 
     let method = substitute(method, '%varname%', s:varname, 'g')
+    let method = substitute(method, '%vartype%', s:vartype, 'g')
     let method = substitute(method, '%funcname%', 'set' . s:funcname, 'g')
+    let method = substitute(method, '%property%', s:funcname, 'g')
 
     call s:InsertMethodBody(method)
 
